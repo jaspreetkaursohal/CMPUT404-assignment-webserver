@@ -1,5 +1,7 @@
 #  coding: utf-8 
 import socketserver
+from pathlib import Path
+from email.utils import formatdate
 
 # Copyright 2013 Abram Hindle, Eddie Antonio Santos
 # 
@@ -29,10 +31,73 @@ import socketserver
 
 class MyWebServer(socketserver.BaseRequestHandler):
     
+    def check_path_existance(self, path):
+        return path.exists()
+    def check_method_name(self,request_info):
+        if(len(request_info) > 0):
+                method_name = request_info.split()
+                return(method_name[0])
+        else:
+            pass
+    
+    def get_url(self,request_info):
+        if(len(request_info) > 1):
+                method_name = request_info.split()
+                return(method_name[1])
+
     def handle(self):
         self.data = self.request.recv(1024).strip()
         print ("Got a request of: %s\n" % self.data)
-        self.request.sendall(bytearray("OK",'utf-8'))
+        decoded_value = self.data.decode('utf-8')
+        if(self.check_method_name(decoded_value)=='GET'):
+            url = self.get_url(decoded_value)
+            url = "www" + url
+            url_path = Path(url)
+            if(self.check_path_existance(url_path)):
+                if(url[-4:] == ".css" ):
+                    f = open(url_path, 'r')
+                    val = f.read()
+                    return_ans = "HTTP/1.1 200 OK\r\n"
+                    return_ans += "Content-Type: text/{}; charset=utf-8\r\n".format(url[-3:])
+                elif(url[-5:] == ".html"):
+                    f = open(url_path, 'r')
+                    val = f.read()
+                    return_ans = "HTTP/1.1 200 OK\r\n"
+                    return_ans += "Content-Type: text/{}; charset=utf-8\r\n".format(url[-4:])
+                elif(url[-1] == '/'):
+                    url += "index.html"
+                    url_path = Path(url)
+                    f = open(url_path, 'r')
+                    val = f.read()
+                    return_ans = "HTTP/1.1 200 OK\r\n"
+                    return_ans += "Content-Type: text/html; charset=utf-8\r\n"
+                elif url[-1] != '/':
+                    url2 =  url + '/index.html'
+                    url_path = Path(url)
+                    url_path2 = Path(url2)
+                    if(self.check_path_existance(url_path2) == False):
+                        return_ans = "HTTP/1.1 404 Not Found\r\n" 
+                        val = ""
+                    else:
+                        f = open(url_path2, 'r')
+                        val = f.read()
+                        return_ans = "HTTP/1.1 301 Moved Permanently\r\n" 
+                        return_ans += "Content-Type: text/html; charset=utf-8\r\n"
+                        return_ans += "Location:http://127.0.0.1:8080{}/\r\n".format(self.get_url(decoded_value))
+            else:
+                
+                return_ans = "HTTP/1.1 404 Not Found\r\n\r\n"
+                val = ""
+        else:
+            return_ans = "HTTP/1.1 405 Method Not Allowed\r\n\r\n"
+            val=""
+        return_ans += "Date:{}\r\n".format(formatdate(timeval=None, localtime=False, usegmt=True))
+        return_ans += "Content-Length: {}\r\n".format(len(val))
+        return_ans += "\r\n"
+        return_ans += val
+        self.request.sendall(return_ans.encode())
+
+
 
 if __name__ == "__main__":
     HOST, PORT = "localhost", 8080
